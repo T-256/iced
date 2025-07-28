@@ -41,8 +41,8 @@ impl Pipeline {
         paragraph: &paragraph::Weak,
         position: Point,
         color: Color,
-        pixels: &mut tiny_skia::PixmapMut<'_>,
-        clip_mask: Option<&tiny_skia::Mask>,
+        pixels: &mut vello_cpu::Pixmap,
+        render_context: &mut vello_cpu::RenderContext,
         transformation: Transformation,
     ) {
         let Some(paragraph) = paragraph.upgrade() else {
@@ -58,7 +58,7 @@ impl Pipeline {
             position,
             color,
             pixels,
-            clip_mask,
+            render_context,
             transformation,
         );
     }
@@ -68,8 +68,8 @@ impl Pipeline {
         editor: &editor::Weak,
         position: Point,
         color: Color,
-        pixels: &mut tiny_skia::PixmapMut<'_>,
-        clip_mask: Option<&tiny_skia::Mask>,
+        pixels: &mut vello_cpu::Pixmap,
+        render_context: &mut vello_cpu::RenderContext,
         transformation: Transformation,
     ) {
         let Some(editor) = editor.upgrade() else {
@@ -85,7 +85,7 @@ impl Pipeline {
             position,
             color,
             pixels,
-            clip_mask,
+            render_context,
             transformation,
         );
     }
@@ -101,8 +101,8 @@ impl Pipeline {
         align_x: Alignment,
         align_y: alignment::Vertical,
         shaping: Shaping,
-        pixels: &mut tiny_skia::PixmapMut<'_>,
-        clip_mask: Option<&tiny_skia::Mask>,
+        pixels: &mut vello_cpu::Pixmap,
+        render_context: &mut vello_cpu::RenderContext,
         transformation: Transformation,
     ) {
         let line_height = f32::from(line_height);
@@ -146,7 +146,7 @@ impl Pipeline {
             Point::new(x, y),
             color,
             pixels,
-            clip_mask,
+            render_context,
             transformation,
         );
     }
@@ -156,8 +156,8 @@ impl Pipeline {
         buffer: &cosmic_text::Buffer,
         position: Point,
         color: Color,
-        pixels: &mut tiny_skia::PixmapMut<'_>,
-        clip_mask: Option<&tiny_skia::Mask>,
+        pixels: &mut vello_cpu::Pixmap,
+        render_context: &mut vello_cpu::RenderContext,
         transformation: Transformation,
     ) {
         let mut font_system = font_system().write().expect("Write font system");
@@ -169,7 +169,7 @@ impl Pipeline {
             position,
             color,
             pixels,
-            clip_mask,
+            render_context,
             transformation,
         );
     }
@@ -186,8 +186,8 @@ fn draw(
     buffer: &cosmic_text::Buffer,
     position: Point,
     color: Color,
-    pixels: &mut tiny_skia::PixmapMut<'_>,
-    clip_mask: Option<&tiny_skia::Mask>,
+    pixels: &mut vello_cpu::Pixmap,
+    render_context: &mut vello_cpu::RenderContext,
     transformation: Transformation,
 ) {
     let position = position * transformation;
@@ -220,19 +220,28 @@ fn draw(
                         .map(|c| c.a() as f32 / 255.0)
                         .unwrap_or(1.0);
 
-                pixels.draw_pixmap(
-                    physical_glyph.x + placement.left,
-                    physical_glyph.y - placement.top
+                let rect = vello_cpu::kurbo::Rect::new(
+                    (physical_glyph.x + placement.left) as f64,
+                    (physical_glyph.y - placement.top
                         + (run.line_y * transformation.scale_factor()).round()
-                            as i32,
-                    pixmap,
-                    &tiny_skia::PixmapPaint {
-                        opacity,
-                        ..tiny_skia::PixmapPaint::default()
-                    },
-                    tiny_skia::Transform::identity(),
-                    clip_mask,
+                            as i32) as f64,
+                    placement.width as f64,
+                    placement.height as f64,
                 );
+
+                // pixels.draw_pixmap(
+                //     physical_glyph.x + placement.left,
+                //     physical_glyph.y - placement.top
+                //         + (run.line_y * transformation.scale_factor()).round()
+                //             as i32,
+                //     pixmap,
+                //     &tiny_skia::PixmapPaint {
+                //         opacity,
+                //         ..tiny_skia::PixmapPaint::default()
+                //     },
+                //     tiny_skia::Transform::identity(),
+                //     clip_mask,
+                // );
             }
         }
     }

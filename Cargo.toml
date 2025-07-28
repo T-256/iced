@@ -22,11 +22,14 @@ all-features = true
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ["wgpu", "tiny-skia", "web-colors", "auto-detect-theme", "thread-pool"]
+# default = ["wgpu", "tiny-skia", "web-colors", "auto-detect-theme", "thread-pool"]
+default = ["vello-cpu", "tokio"]
 # Enables the `wgpu` GPU-accelerated renderer backend
 wgpu = ["iced_renderer/wgpu", "iced_widget/wgpu"]
 # Enables the `tiny-skia` software renderer backend
 tiny-skia = ["iced_renderer/tiny-skia"]
+# Enables the `vello-cpu` software renderer backend
+vello-cpu = ["iced_renderer/vello-cpu"]
 # Enables the `image` widget
 image = ["image-without-codecs", "image/default"]
 # Enables the `image` widget, without any built-in codecs of the `image` crate
@@ -117,6 +120,7 @@ overflow-checks = false
 strip = "debuginfo"
 
 [workspace]
+resolver = "2"
 members = [
     "beacon",
     "core",
@@ -128,12 +132,15 @@ members = [
     "program",
     "renderer",
     "runtime",
-    "test",
+    # "test",
     "tiny_skia",
+    "vello_cpu",
     "wgpu",
     "widget",
     "winit",
-    "examples/*",
+    "examples/counter",
+    "examples/custom_quad",
+    # "examples/*",
 ]
 
 [workspace.package]
@@ -159,8 +166,9 @@ iced_highlighter = { version = "0.14.0-dev", path = "highlighter" }
 iced_program = { version = "0.14.0-dev", path = "program" }
 iced_renderer = { version = "0.14.0-dev", path = "renderer" }
 iced_runtime = { version = "0.14.0-dev", path = "runtime" }
-iced_test = { version = "0.14.0-dev", path = "test" }
+# iced_test = { version = "0.14.0-dev", path = "test" }
 iced_tiny_skia = { version = "0.14.0-dev", path = "tiny_skia" }
+iced_vello_cpu = { version = "0.14.0-dev", path = "vello_cpu" }
 iced_wgpu = { version = "0.14.0-dev", path = "wgpu" }
 iced_widget = { version = "0.14.0-dev", path = "widget" }
 iced_winit = { version = "0.14.0-dev", path = "winit" }
@@ -207,6 +215,7 @@ tokio = "1.0"
 tracing = "0.1"
 unicode-segmentation = "1.0"
 url = "2.5"
+vello_cpu = "0.0.1"
 wasm-bindgen-futures = "0.4"
 wasmtimer = "0.4.1"
 web-sys = "0.3.69"

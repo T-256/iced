@@ -37,9 +37,9 @@ use crate::graphics::Viewport;
 use crate::graphics::compositor;
 use crate::graphics::text::{Editor, Paragraph};
 
-/// A [`tiny-skia`] graphics renderer for [`iced`].
+/// A [`vello-cpu`] graphics renderer for [`iced`].
 ///
-/// [`tiny-skia`]: https://github.com/RazrFalcon/tiny-skia
+/// [`vello-cpu`]: https://github.com/linebender/vello
 /// [`iced`]: https://github.com/iced-rs/iced
 #[derive(Debug)]
 pub struct Renderer {
@@ -66,8 +66,8 @@ impl Renderer {
 
     pub fn draw(
         &mut self,
-        pixels: &mut tiny_skia::PixmapMut<'_>,
-        clip_mask: &mut tiny_skia::Mask,
+        pixels: &mut vello_cpu::Pixmap,
+        render_context: &mut vello_cpu::RenderContext,
         viewport: &Viewport,
         damage: &[Rectangle],
         background_color: Color,
@@ -79,30 +79,21 @@ impl Renderer {
         for &region in damage {
             let region = region * scale_factor;
 
-            let path = tiny_skia::PathBuilder::from_rect(
-                tiny_skia::Rect::from_xywh(
-                    region.x,
-                    region.y,
-                    region.width,
-                    region.height,
-                )
-                .expect("Create damage rectangle"),
+            let rect = vello_cpu::kurbo::Rect::new(
+                region.x as f64,
+                region.y as f64,
+                region.width as f64,
+                region.height as f64,
             );
 
-            pixels.fill_path(
-                &path,
-                &tiny_skia::Paint {
-                    shader: tiny_skia::Shader::SolidColor(engine::into_color(
-                        background_color,
-                    )),
-                    anti_alias: false,
-                    blend_mode: tiny_skia::BlendMode::Source,
-                    ..Default::default()
-                },
-                tiny_skia::FillRule::default(),
-                tiny_skia::Transform::identity(),
-                None,
-            );
+            // render_context.push_blend_layer(vello_cpu::peniko::BlendMode::new(vello_cpu::peniko::Mix::Clip, vello_cpu::peniko::Compose::Copy));
+            render_context.set_paint(vello_cpu::PaintType::Solid(
+                engine::into_color(background_color),
+            ));
+            render_context.fill_rect(&rect);
+            // render_context.pop_layer();
+            render_context
+                .render_to_pixmap(pixels, vello_cpu::RenderMode::default());
 
             for layer in self.layers.iter() {
                 let Some(clip_bounds) =
@@ -111,7 +102,7 @@ impl Renderer {
                     continue;
                 };
 
-                engine::adjust_clip_mask(clip_mask, clip_bounds);
+                engine::adjust_clip_mask(render_context, clip_bounds);
 
                 if !layer.quads.is_empty() {
                     let render_span = debug::render(debug::Primitive::Quad);
@@ -121,13 +112,14 @@ impl Renderer {
                             background,
                             Transformation::scale(scale_factor),
                             pixels,
-                            clip_mask,
+                            render_context,
                             clip_bounds,
                         );
                     }
                     render_span.finish();
                 }
 
+                #[cfg(feature = "geometry")]
                 if !layer.primitives.is_empty() {
                     let render_span = debug::render(debug::Primitive::Triangle);
 
@@ -158,6 +150,7 @@ impl Renderer {
                     render_span.finish();
                 }
 
+                #[cfg(feature = "image")]
                 if !layer.images.is_empty() {
                     let render_span = debug::render(debug::Primitive::Image);
 
@@ -175,7 +168,8 @@ impl Renderer {
                 }
 
                 if !layer.text.is_empty() {
-                    let render_span: iced_debug::Span = debug::render(debug::Primitive::Image);
+                    let render_span: iced_debug::Span =
+                        debug::render(debug::Primitive::Image);
 
                     for group in &layer.text {
                         for text in group.as_slice() {
@@ -184,7 +178,7 @@ impl Renderer {
                                 group.transformation()
                                     * Transformation::scale(scale_factor),
                                 pixels,
-                                clip_mask,
+                                render_context,
                                 clip_bounds,
                             );
                         }
@@ -343,7 +337,7 @@ impl graphics::geometry::Renderer for Renderer {
 
 impl graphics::mesh::Renderer for Renderer {
     fn draw_mesh(&mut self, _mesh: graphics::Mesh) {
-        log::warn!("iced_tiny_skia does not support drawing meshes");
+        log::warn!("iced_vello_cpu does not support drawing meshes");
     }
 }
 
@@ -387,7 +381,7 @@ impl renderer::Headless for Renderer {
         backend: Option<&str>,
     ) -> Option<Self> {
         if backend.is_some_and(|backend| {
-            !["tiny-skia", "tiny_skia"].contains(&backend)
+            !["vello-cpu", "vello_cpu"].contains(&backend)
         }) {
             return None;
         }
@@ -396,7 +390,7 @@ impl renderer::Headless for Renderer {
     }
 
     fn name(&self) -> String {
-        "tiny-skia".to_owned()
+        "vello-cpu".to_owned()
     }
 
     fn screenshot(

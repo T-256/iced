@@ -20,7 +20,7 @@ pub struct Surface {
         Box<dyn compositor::Window>,
         Box<dyn compositor::Window>,
     >,
-    clip_mask: tiny_skia::Mask,
+    render_context: vello_cpu::RenderContext,
     layer_stack: VecDeque<Vec<Layer>>,
     background_color: Color,
     max_age: u8,
@@ -36,11 +36,11 @@ impl crate::graphics::Compositor for Compositor {
         backend: Option<&str>,
     ) -> Result<Self, Error> {
         match backend {
-            None | Some("tiny-skia") | Some("tiny_skia") => {
+            None | Some("vello-cpu") | Some("vello_cpu") => {
                 Ok(new(settings.into(), compatible_window))
             }
             Some(backend) => Err(Error::GraphicsAdapterNotFound {
-                backend: "tiny-skia",
+                backend: "vello-cpu",
                 reason: error::Reason::DidNotMatch {
                     preferred_backend: backend.to_owned(),
                 },
@@ -69,8 +69,10 @@ impl crate::graphics::Compositor for Compositor {
 
         let mut surface = Surface {
             window,
-            clip_mask: tiny_skia::Mask::new(width, height)
-                .expect("Create clip mask"),
+            render_context: vello_cpu::RenderContext::new(
+                width as u16,
+                height as u16,
+            ),
             layer_stack: VecDeque::new(),
             background_color: Color::BLACK,
             max_age: 0,
@@ -95,15 +97,15 @@ impl crate::graphics::Compositor for Compositor {
             )
             .expect("Resize surface");
 
-        surface.clip_mask =
-            tiny_skia::Mask::new(width, height).expect("Create clip mask");
+        surface.render_context =
+            vello_cpu::RenderContext::new(width as u16, height as u16);
         surface.layer_stack.clear();
     }
 
     fn fetch_information(&self) -> Information {
         Information {
             adapter: String::from("CPU"),
-            backend: String::from("tiny-skia"),
+            backend: String::from("vello-cpu"),
         }
     }
 
@@ -195,22 +197,33 @@ pub fn present(
     let damage =
         damage::group(damage, Rectangle::with_size(viewport.logical_size()));
 
-    let mut pixels = tiny_skia::PixmapMut::from_bytes(
-        bytemuck::cast_slice_mut(&mut buffer),
-        physical_size.width,
-        physical_size.height,
-    )
-    .expect("Create pixel map");
+    let mut pixels = vello_cpu::Pixmap::from_parts(
+        bytemuck::cast_slice_mut(&mut buffer).into(),
+        physical_size.width as u16,
+        physical_size.height as u16,
+    );
 
     renderer.draw(
         &mut pixels,
-        &mut surface.clip_mask,
+        &mut surface.render_context,
         viewport,
         &damage,
         background_color,
     );
+    
+    let out = buffer.as_mut();
+    assert_eq!(pixels.data().len(), out.len());
+    for (src, dest) in pixels.data().iter().zip(out.iter_mut()) {
+        let vello_cpu::color::PremulRgba8 { r, g, b, a } = *src;
+        if a == 0 {
+            *dest = u32::MAX;
+        } else {
+            *dest = (r as u32) << 16 | (g as u32) << 8 | b as u32;
+        }
+    }
 
     on_pre_present();
+    surface.render_context.reset();
     buffer.present().map_err(|_| compositor::SurfaceError::Lost)
 }
 
@@ -224,17 +237,16 @@ pub fn screenshot(
     let mut offscreen_buffer: Vec<u32> =
         vec![0; size.width as usize * size.height as usize];
 
-    let mut clip_mask = tiny_skia::Mask::new(size.width, size.height)
-        .expect("Create clip mask");
+    let mut render_context =
+        vello_cpu::RenderContext::new(size.width as u16, size.height as u16);
 
-    renderer.draw(
-        &mut tiny_skia::PixmapMut::from_bytes(
-            bytemuck::cast_slice_mut(&mut offscreen_buffer),
-            size.width,
-            size.height,
-        )
-        .expect("Create offscreen pixel map"),
-        &mut clip_mask,
+        renderer.draw(
+        &mut vello_cpu::Pixmap::from_parts(
+            bytemuck::cast_slice_mut(&mut offscreen_buffer).into(),
+            size.width as u16,
+            size.height as u16,
+        ),
+        &mut render_context,
         viewport,
         &[Rectangle::with_size(Size::new(
             size.width as f32,

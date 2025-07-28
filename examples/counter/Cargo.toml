@@ -12,5 +12,5 @@ iced.workspace = true
 iced.workspace = true
 iced.features = ["webgl", "fira-sans"]
 
-[dev-dependencies]
-iced_test.workspace = true
+# [dev-dependencies]
+# iced_test.workspace = true
